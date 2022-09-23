@@ -209,6 +209,8 @@ def getConfig():
                 cfg["FritzBoxUser"] = conf["FritzBoxUser"]
             if "FritzBoxPassword" in conf:
                 cfg["FritzBoxPassword"] = conf["FritzBoxPassword"]
+            if "devices" in conf:
+                cfg["devices"] = conf["devices"]
 
 
     logger.info("Configuration:")
@@ -279,6 +281,9 @@ getConfig()
 
 # Log in to FritzBox
 fb = FritzBox(cfg["FritzBoxURL"], cfg["FritzBoxUser"], cfg["FritzBoxPassword"])
+
+# Complete device data from configiration data
+fb.completeDeviceData(cfg["devices"])
 
 
 noWait = False

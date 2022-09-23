@@ -168,3 +168,13 @@ class FritzBox:
                 haDev.hasTemperature = True
 
             self.devices.append(haDev)
+
+    def completeDeviceData(self, data):
+        """
+        Complete device data with given data        
+        """
+        for dev in self.devices:
+            ain = dev.ain
+            for ref in data:
+                if ref["ain"] == ain:
+                    dev.completeData(ref)
