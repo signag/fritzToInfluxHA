@@ -30,6 +30,7 @@ import os
 import xml.etree.ElementTree as ET
 from enum import Enum
 import datetime
+import influxdb_client
 from .FritzHaDevice import FritzHaDevice
 
 #Setup logging
@@ -327,3 +328,10 @@ class FritzBox:
             f.write(txt)
 
         f.close()
+
+    def writeDataToInflux(self, write_api, org, bucket):
+        """
+        Write measurements to InfluxDB
+        """
+        for dev in self.devices:
+            dev.writeMeasurmentsToInfluxDB(write_api, org, bucket)

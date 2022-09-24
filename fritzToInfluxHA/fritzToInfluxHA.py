@@ -11,6 +11,8 @@ import datetime
 import math
 import os.path
 import json
+import influxdb_client
+from influxdb_client.client.write_api import SYNCHRONOUS
 from fritz.FritzBox import FritzBox
 
 # Set up logging
@@ -29,6 +31,11 @@ cfg = {
     "FritzBoxURL" : "http://fritz.box/",
     "FritzBoxUser" : None,
     "FritzBoxPassword" : None,
+    "InfluxOutput" : False,
+    "InfluxURL" : None,
+    "InfluxOrg" : None,
+    "InfluxToken" : None,
+    "InfluxBucket" : None,
     "csvOutput" : False,
     "csvFile" : "",
     "devices" : []
@@ -211,6 +218,16 @@ def getConfig():
                 cfg["FritzBoxUser"] = conf["FritzBoxUser"]
             if "FritzBoxPassword" in conf:
                 cfg["FritzBoxPassword"] = conf["FritzBoxPassword"]
+            if "InfluxOutput" in conf:
+                cfg["InfluxOutput"] = conf["InfluxOutput"]
+            if "InfluxURL" in conf:
+                cfg["InfluxURL"] = conf["InfluxURL"]
+            if "InfluxOrg" in conf:
+                cfg["InfluxOrg"] = conf["InfluxOrg"]
+            if "InfluxToken" in conf:
+                cfg["InfluxToken"] = conf["InfluxToken"]
+            if "InfluxBucket" in conf:
+                cfg["InfluxBucket"] = conf["InfluxBucket"]
             if "csvOutput" in conf:
                 cfg["csvOutput"] = conf["csvOutput"]
             if "csvFile" in conf:
@@ -220,14 +237,19 @@ def getConfig():
             if "devices" in conf:
                 cfg["devices"] = conf["devices"]
 
-
     logger.info("Configuration:")
     logger.info("    measurementInterval:%s", cfg["measurementInterval"])
     logger.info("    FritzBoxURL:%s", cfg["FritzBoxURL"])
     logger.info("    FritzBoxUser:%s", cfg["FritzBoxUser"])
     logger.info("    FritzBoxPassword:%s", cfg["FritzBoxPassword"])
+    logger.info("    InfluxOutput:%s", cfg["InfluxOutput"])
+    logger.info("    InfluxURL:%s", cfg["InfluxURL"])
+    logger.info("    InfluxOrg:%s", cfg["InfluxOrg"])
+    logger.info("    InfluxToken:%s", cfg["InfluxToken"])
+    logger.info("    InfluxBucket:%s", cfg["InfluxBucket"])
     logger.info("    csvOutput:%s", cfg["csvOutput"])
     logger.info("    csvFile:%s", cfg["csvFile"])
+
 
 def waitForNextCycle():
     """
@@ -295,6 +317,15 @@ fb = FritzBox(cfg["FritzBoxURL"], cfg["FritzBoxUser"], cfg["FritzBoxPassword"])
 # Complete device data from configiration data
 fb.completeDeviceData(cfg["devices"])
 
+# Instatntiate InfluxDB access
+if cfg["InfluxOutput"]:
+    influxClient = influxdb_client.InfluxDBClient(
+        url=cfg["InfluxURL"],
+        token=cfg["InfluxToken"],
+        org=cfg["InfluxOrg"]
+    )
+    influxWriteAPI = influxClient.write_api(write_options=SYNCHRONOUS)
+
 noWait = False
 stop = False
 
@@ -313,6 +344,10 @@ while not stop:
         if cfg["csvOutput"]:
             fp = cfg["csvFile"]
             fb.writeDataToCsv(fp)
+
+        # Write data to InfluxDB
+        if cfg["InfluxOutput"]:
+            fb.writeDataToInflux(influxWriteAPI, cfg["InfluxOrg"], cfg["InfluxBucket"])            
 
         if testRun:
             # Stop in case of test run
