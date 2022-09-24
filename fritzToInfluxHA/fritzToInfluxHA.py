@@ -339,6 +339,7 @@ while not stop:
 
         # Get measurements for all devices
         fb.evaluateDeviceInfo()
+        logger.info("Measurement completed")
 
         # Write data to CSV
         if cfg["csvOutput"]:
@@ -347,7 +348,8 @@ while not stop:
 
         # Write data to InfluxDB
         if cfg["InfluxOutput"]:
-            fb.writeDataToInflux(influxWriteAPI, cfg["InfluxOrg"], cfg["InfluxBucket"])            
+            fb.writeDataToInflux(influxWriteAPI, cfg["InfluxOrg"], cfg["InfluxBucket"])
+            logger.info("Data written to InfluxDB")
 
         if testRun:
             # Stop in case of test run

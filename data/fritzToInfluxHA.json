@@ -1,0 +1,26 @@
+{
+    "measurementInterval": 120,
+    "FritzBoxURL" : "http://fritz.box/",
+    "FritzBoxUser" : "",
+    "FritzBoxPassword" : "",
+    "InfluxOutput" : true,
+    "InfluxURL" : "",
+    "InfluxOrg" : "",
+    "InfluxToken" : "",
+    "InfluxBucket" : "",
+    "csvOutput" : false,
+    "csvFile" : "",
+    "devices" : [
+        {
+            "ain" : "",
+            "location" : "",
+            "sublocation" : "",
+            "measurements" : {
+                "voltage" : true,
+                "power" : true,
+                "energy" : true,
+                "temperature" : true
+            }
+        }
+    ]
+}
