@@ -34,6 +34,7 @@ class FritzHaDevice:
         self.sublocation = None
         self.state = None
         self.present = None
+
         self.voltage = None
         self.power = None
         self.energy = None
@@ -48,10 +49,7 @@ class FritzHaDevice:
         self.measurements = {}
 
     def __del__(self):
-        self.terminate()
-
-    def terminate(self):
-        self.logoff()
+        pass
 
     def completeData(self, data):
         """

@@ -8,7 +8,6 @@ and and stores related measurement date in an InfluxDB
 
 import time
 import datetime
-import sys
 import math
 import os.path
 import json
@@ -29,7 +28,10 @@ cfg = {
     "measurementInterval": 2,
     "FritzBoxURL" : "http://fritz.box/",
     "FritzBoxUser" : None,
-    "FritzBoxPassword" : None
+    "FritzBoxPassword" : None,
+    "csvOutput" : False,
+    "csvFile" : "",
+    "devices" : []
 }
 
 # Constants
@@ -209,6 +211,12 @@ def getConfig():
                 cfg["FritzBoxUser"] = conf["FritzBoxUser"]
             if "FritzBoxPassword" in conf:
                 cfg["FritzBoxPassword"] = conf["FritzBoxPassword"]
+            if "csvOutput" in conf:
+                cfg["csvOutput"] = conf["csvOutput"]
+            if "csvFile" in conf:
+                cfg["csvFile"] = conf["csvFile"]
+            if cfg["csvFile"] == "":
+                cfg["csvOutput"] = False
             if "devices" in conf:
                 cfg["devices"] = conf["devices"]
 
@@ -218,6 +226,8 @@ def getConfig():
     logger.info("    FritzBoxURL:%s", cfg["FritzBoxURL"])
     logger.info("    FritzBoxUser:%s", cfg["FritzBoxUser"])
     logger.info("    FritzBoxPassword:%s", cfg["FritzBoxPassword"])
+    logger.info("    csvOutput:%s", cfg["csvOutput"])
+    logger.info("    csvFile:%s", cfg["csvFile"])
 
 def waitForNextCycle():
     """
@@ -285,7 +295,6 @@ fb = FritzBox(cfg["FritzBoxURL"], cfg["FritzBoxUser"], cfg["FritzBoxPassword"])
 # Complete device data from configiration data
 fb.completeDeviceData(cfg["devices"])
 
-
 noWait = False
 stop = False
 
@@ -297,6 +306,13 @@ while not stop:
             waitForNextCycle()
         noWait = False
 
+        # Get measurements for all devices
+        fb.evaluateDeviceInfo()
+
+        # Write data to CSV
+        if cfg["csvOutput"]:
+            fp = cfg["csvFile"]
+            fb.writeDataToCsv(fp)
 
         if testRun:
             # Stop in case of test run
@@ -319,6 +335,7 @@ while not stop:
     except Exception as error:
         if fb:
             del fb
+        raise error
 
     except KeyboardInterrupt:
         if fb:

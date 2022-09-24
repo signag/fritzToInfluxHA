@@ -26,8 +26,10 @@ This module includes classes for an abstraction of a Fritz!Box.
 """
 import requests
 import hashlib
+import os
 import xml.etree.ElementTree as ET
 from enum import Enum
+import datetime
 from .FritzHaDevice import FritzHaDevice
 
 #Setup logging
@@ -48,6 +50,13 @@ class FritzBoxError(Exception):
     Base exception class for this module
     """
     pass
+
+class FritzBoxLoginError(FritzBoxError):
+    """
+    Fritzbox Login exception class for this module
+    """
+    def __init__(self):
+        self.message = "Fritz!Box login failed"
 
 class FritzBox:
     """
@@ -90,7 +99,10 @@ class FritzBox:
         if root.findtext("SID") == "0000000000000000":
             #invalid SID. Need to get new SID
             challenge = root.findtext("Challenge")
-            self.getSid(challenge)
+            if challenge:
+                self.getSid(challenge)
+            else:
+                raise FritzBoxLoginError
 
     def logoff(self):
         """
@@ -111,9 +123,12 @@ class FritzBox:
         response = challenge + '-' + md5.hexdigest()
         theUrl = f"{self.url}login_sid.lua?username={self.user}&response={response}"
         resp = self.sendRequest(theUrl)
-        root = ET.fromstring(resp)
-        self.sid = root.findtext("SID")
-        logger.debug("SID: %s", self.sid)
+        if resp:
+            root = ET.fromstring(resp)
+            self.sid = root.findtext("SID")
+            logger.debug("SID: %s", self.sid)
+        else:
+            raise FritzBoxLoginError
 
     def sendRequest(self, url):
         """
@@ -178,3 +193,137 @@ class FritzBox:
             for ref in data:
                 if ref["ain"] == ain:
                     dev.completeData(ref)
+    
+    def evaluateDeviceInfo(self):
+        """
+        Query device info from Fritzbox and update devices with measurements
+        """
+        try:
+            measurementTime = datetime.datetime.now()
+            theUrl = self.url + "webservices/homeautoswitch.lua" + "?switchcmd=getdevicelistinfos&sid=" + self.sid
+            resp = self.sendRequest(theUrl)
+            if not resp:
+                # In case of request error: login with new SID
+                self.login()
+                resp = self.sendRequest(theUrl)
+                if not resp:
+                    # In case of repeated error throw exception
+                    logger.error("Error sending request for getdevicelistinfos after successful logib")
+                    raise FritzBoxError
+
+            root = ET.fromstring(resp)
+            for dev in root:
+                ain = dev.attrib['identifier']
+                ain = ain.strip()
+                ain = ain.replace(" ", "")
+                device = None
+                for sdev in self.devices:
+                    if sdev.ain == ain:
+                        device = sdev
+                        break
+                if device:
+                    powermeter = dev.find("powermeter")
+                    if powermeter:
+                        voltage = powermeter.findtext("voltage")
+                        if voltage:
+                            device.voltage = int(voltage)/1000
+                        power = powermeter.findtext("power")
+                        if power:
+                            device.power = int(power)/1000
+                        energy = powermeter.findtext("energy")
+                        if energy:
+                            device.energy = int(energy)/1000
+                    temperature = dev.find("temperature")
+                    if temperature:
+                        celsius = temperature.findtext("celsius")
+                        if celsius:
+                            device.temperature = int(celsius)/10
+                    device.measurementTime = measurementTime
+
+        except FritzBoxError as error:
+            raise
+
+    def writeDataToCsv(self, fp):
+        """
+        Write measurement values to a csv file
+        """
+        f = None
+        newFile=True
+        if os.path.exists(fp):
+            newFile = False
+        if newFile:
+            f = open(fp, 'w')
+        else:
+            f = open(fp, 'a')
+        logger.debug("File opened: %s", fp)
+
+        sep = ","
+        if newFile:
+            txt = "Time" + sep \
+                + "AIn" + sep \
+                + "Type" + sep \
+                + "Name" + sep \
+                + "Location" + sep \
+                + "Sublocation" + sep \
+                + "State" + sep \
+                + "Present" + sep \
+                + "Voltage" + sep \
+                + "Power" + sep \
+                + "Energy" + sep \
+                + "Temperature" \
+                + "\n"
+            f.write(txt)
+
+        for dev in self.devices:
+            txt = ""
+            if dev.measurementTime:
+                ts = dev.measurementTime.strftime("%Y-%m-%d %H:%M:%S.%f")
+                txt = txt + ts + sep
+            else:
+                txt = txt + sep
+            if dev.ain:
+                txt = txt + dev.ain + sep
+            else:
+                txt = txt + sep
+            if dev.type:
+                txt = txt + dev.type.name + sep
+            else:
+                txt = txt + sep
+            if dev.name:
+                txt = txt + dev.name + sep
+            else:
+                txt = txt + sep
+            if dev.location:
+                txt = txt + dev.location + sep
+            else:
+                txt = txt + sep
+            if dev.sublocation:
+                txt = txt + dev.sublocation + sep
+            else:
+                txt = txt + sep
+            if dev.state:
+                txt = txt + dev.state + sep
+            else:
+                txt = txt + sep
+            if dev.present:
+                txt = txt + dev.present + sep
+            else:
+                txt = txt + sep
+            if dev.voltage:
+                txt = txt + format(dev.voltage) + sep
+            else:
+                txt = txt + sep
+            if dev.power:
+                txt = txt + format(dev.power) + sep
+            else:
+                txt = txt + sep
+            if dev.energy:
+                txt = txt + format(dev.energy) + sep
+            else:
+                txt = txt + sep
+            if dev.temperature:
+                txt = txt + format(dev.temperature)
+            txt = txt + "\n"
+            f.write(txt)
+
+        f.close()
