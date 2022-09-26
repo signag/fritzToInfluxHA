@@ -2,7 +2,7 @@
 """
 Module fritzToInfluxHA
 
-This module reads data from Fritz!Box Home Automation modules
+This module periodically reads data from Fritz!Box Home Automation modules
 and and stores related measurement date in an InfluxDB
 """
 
@@ -13,7 +13,7 @@ import os.path
 import json
 import influxdb_client
 from influxdb_client.client.write_api import SYNCHRONOUS
-from fritz.FritzBox import FritzBox
+from fritz.FritzBox import FritzBox, FritzBoxError, FritzBoxIgnoreableError
 
 # Set up logging
 import logging
@@ -249,6 +249,10 @@ def getConfig():
     logger.info("    InfluxBucket:%s", cfg["InfluxBucket"])
     logger.info("    csvOutput:%s", cfg["csvOutput"])
     logger.info("    csvFile:%s", cfg["csvFile"])
+    logger.info("    Devices:%s", len(cfg["devices"]))
+    for ind in range(0, len(cfg["devices"])):
+        dev = cfg["devices"][ind]
+        logger.info("       %s (%s - %s)", dev["ain"], dev["location"], dev["sublocation"])
 
 
 def waitForNextCycle():
@@ -297,6 +301,20 @@ def waitForNextCycle():
         logger.debug("At %s waiting for %s sec.", datetime.datetime.now().strftime("%Y/%m/%d %H:%M:%S,"), waitTimeSec)
         time.sleep(waitTimeSec)
 
+def logDeviceInconsistencies(cfgDefs, fritzDevs):
+    for dev in fritzDevs:
+        if not dev.isMonitored:
+            logger.error("Missing configuretion for device ain=%s name=%s", dev.ain, dev.name)
+    for ind in range(0, len(cfg["devices"])):
+        devc = cfg["devices"][ind]
+        cnt = 0
+        for dev in fritzDevs:
+            if dev.ain == devc["ain"]:
+                cnt = cnt + 1
+                break
+        if cnt == 0:
+            logger.error("No device found for configuration ain=%s", devc["ain"])
+
 #============================================================================================
 # Start __main__
 #============================================================================================
@@ -313,9 +331,14 @@ getConfig()
 
 # Log in to FritzBox
 fb = FritzBox(cfg["FritzBoxURL"], cfg["FritzBoxUser"], cfg["FritzBoxPassword"])
+logger.debug("FritzBox fb instantiated")
 
 # Complete device data from configiration data
 fb.completeDeviceData(cfg["devices"])
+logger.debug("Device data completed from config for %s devices", len(cfg["devices"]))
+
+# Log inconsistencies between configured devices and devices found on FritzBox
+logDeviceInconsistencies(cfg["devices"], fb.devices)
 
 # Instatntiate InfluxDB access
 if cfg["InfluxOutput"]:
@@ -325,6 +348,7 @@ if cfg["InfluxOutput"]:
         org=cfg["InfluxOrg"]
     )
     influxWriteAPI = influxClient.write_api(write_options=SYNCHRONOUS)
+    logger.debug("Influx interface instantiated")
 
 noWait = False
 stop = False
@@ -339,7 +363,8 @@ while not stop:
 
         # Get measurements for all devices
         fb.evaluateDeviceInfo()
-        logger.info("Measurement completed")
+        if not servRun:
+            logger.info("Measurement completed")
 
         # Write data to CSV
         if cfg["csvOutput"]:
@@ -349,17 +374,17 @@ while not stop:
         # Write data to InfluxDB
         if cfg["InfluxOutput"]:
             fb.writeDataToInflux(influxWriteAPI, cfg["InfluxOrg"], cfg["InfluxBucket"])
-            logger.info("Data written to InfluxDB")
+            if not servRun:
+                logger.info("Data written to InfluxDB")
 
         if testRun:
             # Stop in case of test run
             stop = True
 
-
-    except RuntimeError as error:
+    except FritzBoxIgnoreableError as error:
         # Errors 
         if not servRun:
-            logger.error("Ignored RuntimeError: %s", error.args[0])
+            logger.error("Ignored FritzBoxIgnoreableError: %s", error.args[0])
 
         noWait = True
         if testRun:
@@ -370,16 +395,29 @@ while not stop:
             continue
 
     except Exception as error:
+        logger.critical("Unexpected error: %s", error.args[0])
         if fb:
             del fb
+        if influxClient:
+            del influxClient
+        if influxWriteAPI:
+            del influxWriteAPI
         raise error
 
     except KeyboardInterrupt:
         if fb:
             del fb
+        if influxClient:
+            del influxClient
+        if influxWriteAPI:
+            del influxWriteAPI
 
 if fb:
     del fb
+if influxClient:
+    del influxClient
+if influxWriteAPI:
+    del influxWriteAPI
 
 logger.info("=============================================================")
 logger.info("fritzToInfluxHA terminated")

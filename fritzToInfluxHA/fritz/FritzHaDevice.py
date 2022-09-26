@@ -5,6 +5,7 @@ This module includes classes for an abstraction of a Fritz Home Automation devic
 """
 
 #Setup logging
+from math import fabs
 import influxdb_client
 from influxdb_client.client.write_api import WritePrecision
 import logging
@@ -48,6 +49,8 @@ class FritzHaDevice:
         self.measureVoltage = False
         self.measurements = {}
 
+        self.isMonitored = False
+
     def __del__(self):
         pass
 
@@ -61,37 +64,38 @@ class FritzHaDevice:
             self.sublocation = data["sublocation"]
         if "measurements" in data:
             self.measurements = data["measurements"]
+        self.isMonitored = True            
 
     def writeMeasurmentsToInfluxDB(self, write_api, org, bucket):
         ts = self.measurementTime.strftime("%Y-%m-%dT%H:%M:%S.%f+02")
         if "voltage" in self.measurements:
             if self.measurements["voltage"] and self.voltage:
                 point = influxdb_client.Point("voltage") \
-                       .tag("ain", self.ain) \
-                       .tag("location", self.location) \
-                       .tag("sublocation", self.sublocation) \
-                       .tag("state", self.state) \
-                       .field("value", self.voltage)
+                    .tag("ain", self.ain) \
+                    .tag("location", self.location) \
+                    .tag("sublocation", self.sublocation) \
+                    .tag("state", self.state) \
+                    .field("value", self.voltage)
                 write_api.write(bucket=bucket, org=org, record=point)
 
         if "power" in self.measurements:
             if self.measurements["power"] and self.power:
                 point = influxdb_client.Point("power") \
-                       .tag("ain", self.ain) \
-                       .tag("location", self.location) \
-                       .tag("sublocation", self.sublocation) \
-                       .tag("state", self.state) \
-                       .field("value", self.power)
+                    .tag("ain", self.ain) \
+                    .tag("location", self.location) \
+                    .tag("sublocation", self.sublocation) \
+                    .tag("state", self.state) \
+                    .field("value", self.power)
                 write_api.write(bucket=bucket, org=org, record=point)
 
         if "energy" in self.measurements:
             if self.measurements["energy"] and self.energy:
                 point = influxdb_client.Point("energy") \
-                       .tag("ain", self.ain) \
-                       .tag("location", self.location) \
-                       .tag("sublocation", self.sublocation) \
-                       .tag("state", self.state) \
-                       .field("value", self.energy)
+                    .tag("ain", self.ain) \
+                    .tag("location", self.location) \
+                    .tag("sublocation", self.sublocation) \
+                    .tag("state", self.state) \
+                    .field("value", self.energy)
                 write_api.write(bucket=bucket, org=org, record=point)
 
         if "temperature" in self.measurements:
@@ -100,9 +104,9 @@ class FritzHaDevice:
                 if not state:
                     state = "1"
                 point = influxdb_client.Point("temperature") \
-                       .tag("ain", self.ain) \
-                       .tag("location", self.location) \
-                       .tag("sublocation", self.sublocation) \
-                       .tag("state", state) \
-                       .field("value", self.temperature)
+                    .tag("ain", self.ain) \
+                    .tag("location", self.location) \
+                    .tag("sublocation", self.sublocation) \
+                    .tag("state", state) \
+                    .field("value", self.temperature)
                 write_api.write(bucket=bucket, org=org, record=point)

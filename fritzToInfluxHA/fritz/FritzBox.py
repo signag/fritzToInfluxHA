@@ -52,6 +52,19 @@ class FritzBoxError(Exception):
     """
     pass
 
+class FritzBoxIgnoreableError(FritzBoxError):
+    """
+    Base exception class for this module
+    """
+    pass
+
+class FritzBoxConnectionError(FritzBoxIgnoreableError):
+    """
+    Fritzbox Connection exception class for this module
+    """
+    def __init__(self):
+        self.message = "Fritz!Box cannot be reached"
+
 class FritzBoxLoginError(FritzBoxError):
     """
     Fritzbox Login exception class for this module
@@ -76,12 +89,17 @@ class FritzBox:
         self.pwd = pwd
         self.devices = []
 
+        self.loginSuccess = False
+
         # Login
-        self.login()
+        try:
+            self.login()
+            self.loginSuccess = True
 
-        # Get list of devices
-        self.getHaDevices()
-
+            # Get list of devices
+            self.getHaDevices()
+        except FritzBoxError:
+            raise
 
     def __del__(self):
         self.terminate()
@@ -136,15 +154,25 @@ class FritzBox:
         Send a request with given URL and return response
         """
         logger.debug("Request URL: %s", url)
-        resp = requests.get(url)
-        if resp.status_code == requests.codes.OK:
-            respTxt = resp.text.strip()
-            logger.debug("Response: %s", respTxt)
-            return respTxt
-        else:
-            logger.error("HTTP request [" + resp.url + "] failed with status code " + resp.status_code + " reason " + resp.reason)
-            resp.raise_for_status
-            return None
+        try:
+            resp = requests.get(url)
+            if resp.status_code == requests.codes.OK:
+                respTxt = resp.text.strip()
+                logger.debug("Response: %s", respTxt)
+                return respTxt
+            else:
+                logger.error("HTTP request [" + resp.url + "] failed with status code " + resp.status_code + " reason " + resp.reason)
+                resp.raise_for_status
+                return None
+        except (requests.ConnectionError, \
+                requests.ConnectTimeout,
+                requests.ReadTimeout
+        ):
+            if self.loginSuccess:
+                # Ignore connection error if FritzBox is temporarily not reacheable
+                raise FritzBoxConnectionError
+            else:
+                raise
 
     def getHaDevices(self):
         """
@@ -334,4 +362,5 @@ class FritzBox:
         Write measurements to InfluxDB
         """
         for dev in self.devices:
-            dev.writeMeasurmentsToInfluxDB(write_api, org, bucket)
+            if dev.isMonitored:
+                dev.writeMeasurmentsToInfluxDB(write_api, org, bucket)
