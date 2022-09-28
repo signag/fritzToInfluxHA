@@ -7,7 +7,7 @@ In order to use the program you need
 - One or more DECT HA devices or DECT Repeaters registered for the Fritz!Box
 - An Influx DB V2.4 or later running on the same or another machine
 
-AVM Information on interfaces and protocos for Fritz!Box access can be found at <https://avm.de/service/schnittstellen/>
+AVM Information on interfaces and protocols for Fritz!Box access can be found at <https://avm.de/service/schnittstellen/>
 
 InfluxDB (<https://www.influxdata.com/products/influxdb-overview/>) is a time series database which can be used as cloud version or local installation on various platforms.
 
@@ -155,11 +155,11 @@ To continuously log weather data, **fritzToInfluxHA** should be run as service.
 A service configuration file template can be found under
 ```./data``` in the installation folder.
 
-| Step | Action                                                                                        |
-|------|-----------------------------------------------------------------------------------------------|
-| 1.   | Adjust the service configuration file, if required, especially check python path and user     |
-| 2.   | Stage configuration file: ```sudo cp fritzToInfluxHA.service /etc/systemd/system ```          |
-| 3.   | Start service: ```sudo systemctl start fritzToInfluxHA.service ```                            |
-| 4.   | Check log: ```journalctl -h ``` should show that **fritzToInfluxHA** has successfully started |
-| 5.   | In case of errors adjust settings and restart service                                         |
-| 6.   | To enable your service on every reboot: ```sudo systemctl enable fritzToInfluxHA.service```   |
+| Step | Action                                                                                             |
+|------|----------------------------------------------------------------------------------------------------|
+| 1.   | Adjust the service configuration file, if required, especially check python path and user          |
+| 2.   | Stage configuration file: ```sudo cp fritzToInfluxHA.service /etc/systemd/system ```               |
+| 3.   | Start service: ```sudo systemctl start fritzToInfluxHA.service ```                                 |
+| 4.   | Check log: ```sudo journalctl -e ``` should show that **fritzToInfluxHA** has successfully started |
+| 5.   | In case of errors adjust service configuration file and restart service                            |
+| 6.   | To enable your service on every reboot: ```sudo systemctl enable fritzToInfluxHA.service```        |
