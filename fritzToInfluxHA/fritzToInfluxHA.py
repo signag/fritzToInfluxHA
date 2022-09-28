@@ -27,7 +27,7 @@ servRun = False
 # Configuration defaults
 cfgFile = ""
 cfg = {
-    "measurementInterval": 2,
+    "measurementInterval": 120,
     "FritzBoxURL" : "http://fritz.box/",
     "FritzBoxUser" : None,
     "FritzBoxPassword" : None,
