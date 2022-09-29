@@ -50,13 +50,15 @@ class FritzBoxError(Exception):
     """
     Base exception class for this module
     """
-    pass
+    def __init__(self):
+        self.message = "Fritz!Box general error"
 
 class FritzBoxIgnoreableError(FritzBoxError):
     """
     Base exception class for this module
     """
-    pass
+    def __init__(self):
+        self.message = "Fritz!Box ignoreable error"
 
 class FritzBoxConnectionError(FritzBoxIgnoreableError):
     """
@@ -71,6 +73,13 @@ class FritzBoxLoginError(FritzBoxError):
     """
     def __init__(self):
         self.message = "Fritz!Box login failed"
+
+class FritzBoxNoDeviceError(FritzBoxError):
+    """
+    Fritzbox exception class for this module
+    """
+    def __init__(self):
+        self.message = "No devices found on Fritz!Box"
 
 class FritzBox:
     """
@@ -98,6 +107,15 @@ class FritzBox:
 
             # Get list of devices
             self.getHaDevices()
+
+            ### Test: handling if no devices were found
+            ### Test Start
+            #self.devices = []
+            ### Test End
+            if len(self.devices) == 0:
+                logger.error("No devices found for Fritz!Box")
+                raise FritzBoxNoDeviceError
+                
         except FritzBoxError:
             raise
 
@@ -161,12 +179,12 @@ class FritzBox:
                 logger.debug("Response: %s", respTxt)
                 return respTxt
             else:
-                logger.error("HTTP request [" + resp.url + "] failed with status code " + resp.status_code + " reason " + resp.reason)
+                logger.error("HTTP request [%s] failed with status code %s reason %s", resp.url, resp.status_code, resp.reason)
                 resp.raise_for_status
                 return None
         except (requests.ConnectionError, \
-                requests.ConnectTimeout,
-                requests.ReadTimeout
+                requests.ConnectTimeout, \
+                requests.ReadTimeout \
         ):
             if self.loginSuccess:
                 # Ignore connection error if FritzBox is temporarily not reacheable
@@ -234,6 +252,7 @@ class FritzBox:
             if not resp:
                 # In case of request error: login with new SID
                 self.login()
+                theUrl = self.url + "webservices/homeautoswitch.lua" + "?switchcmd=getdevicelistinfos&sid=" + self.sid
                 resp = self.sendRequest(theUrl)
                 if not resp:
                     # In case of repeated error throw exception

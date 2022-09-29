@@ -86,6 +86,10 @@ def getCl():
     # Disable logging
     logger = logging_plus.getLogger("main")
     logger.addHandler(logging.NullHandler())
+    fLogger = logging_plus.getLogger(FritzBox.__module__)
+    fLogger.addHandler(logging.NullHandler())
+    rLogger = logging_plus.getLogger()
+    rLogger.addHandler(logging.NullHandler())
 
     # Set handler and formatter to be used
     handler = logging.StreamHandler()
@@ -101,13 +105,17 @@ def getCl():
 
     if args.Log:
         # Deep logging
+        handler.setFormatter(formatter2)
         logger.addHandler(handler)
         logger.setLevel(logging.DEBUG)
-        # Activate logging of function entry and exit
-        logging_plus.registerAutoLogEntryExit()
+        fLogger.addHandler(handler)
+        fLogger.setLevel(logging.DEBUG)
 
     if args.Full:
         # Full logging
+        handler.setFormatter(formatter2)
+        rLogger.addHandler(handler)
+        rLogger.setLevel(logging.DEBUG)
         # Activate logging of function entry and exit
         logging_plus.registerAutoLogEntryExit()
 
@@ -141,6 +149,8 @@ def getCl():
         if not args.log and not args.Log and not args.Full:
             logger.addHandler(handler)
             logger.setLevel(logging.INFO)
+            fLogger.addHandler(handler)
+            fLogger.setLevel(logging.WARNING)
 
     if args.test:
         testRun = True
@@ -329,30 +339,43 @@ logger.info("=============================================================")
 # Get configuration
 getConfig()
 
-# Log in to FritzBox
-fb = FritzBox(cfg["FritzBoxURL"], cfg["FritzBoxUser"], cfg["FritzBoxPassword"])
-logger.debug("FritzBox fb instantiated")
+fb = None
+influxClient = None
+influxWriteAPI = None
 
-# Complete device data from configiration data
-fb.completeDeviceData(cfg["devices"])
-logger.debug("Device data completed from config for %s devices", len(cfg["devices"]))
+try:
+    # Log in to FritzBox
+    fb = FritzBox(cfg["FritzBoxURL"], cfg["FritzBoxUser"], cfg["FritzBoxPassword"])
+    logger.debug("FritzBox fb instantiated")
 
-# Log inconsistencies between configured devices and devices found on FritzBox
-logDeviceInconsistencies(cfg["devices"], fb.devices)
+    # Complete device data from configiration data
+    fb.completeDeviceData(cfg["devices"])
+    logger.debug("Device data completed from config for %s devices", len(cfg["devices"]))
 
-# Instatntiate InfluxDB access
-if cfg["InfluxOutput"]:
-    influxClient = influxdb_client.InfluxDBClient(
-        url=cfg["InfluxURL"],
-        token=cfg["InfluxToken"],
-        org=cfg["InfluxOrg"]
-    )
-    influxWriteAPI = influxClient.write_api(write_options=SYNCHRONOUS)
-    logger.debug("Influx interface instantiated")
+    # Log inconsistencies between configured devices and devices found on FritzBox
+    logDeviceInconsistencies(cfg["devices"], fb.devices)
 
-noWait = False
-stop = False
+    # Instatntiate InfluxDB access
+    if cfg["InfluxOutput"]:
+        influxClient = influxdb_client.InfluxDBClient(
+            url=cfg["InfluxURL"],
+            token=cfg["InfluxToken"],
+            org=cfg["InfluxOrg"]
+        )
+        influxWriteAPI = influxClient.write_api(write_options=SYNCHRONOUS)
+        logger.debug("Influx interface instantiated")
 
+    noWait = False
+    stop = False
+
+except FritzBoxError as error:
+    logger.critical("Unexpected error: %s", error.message)
+    stop = True
+    fb = None
+    influxClient = None
+    influxWriteAPI = None
+
+failcount = 0
 while not stop:
     try:
         # Wait unless noWait is set in case of sensor error.
@@ -360,6 +383,19 @@ while not stop:
         if not noWait and not testRun:
             waitForNextCycle()
         noWait = False
+
+        ### Test FritzBox down (simulated through invalid URL)
+        ### Start Test
+        #if failcount == 0:
+        #    testRun = False
+        #    # Make URL invalid
+        #    fb.url = "http://fritzy.box"
+        #    # Make sid invalid which would be the case for a FritzBox update
+        #    fb.sid = "xyz"
+        #if failcount == 2:
+        #    fb.url = cfg["FritzBoxURL"]
+        #    testRun = True
+        ### End Test
 
         # Get measurements for all devices
         fb.evaluateDeviceInfo()
@@ -382,9 +418,8 @@ while not stop:
             stop = True
 
     except FritzBoxIgnoreableError as error:
-        # Errors 
-        if not servRun:
-            logger.error("Ignored FritzBoxIgnoreableError: %s", error.args[0])
+        failcount = failcount + 1
+        logger.error("Ignored FritzBoxIgnoreableError (%s): %s", failcount, error.message)
 
         noWait = True
         if testRun:
@@ -394,8 +429,17 @@ while not stop:
             time.sleep(2.0)
             continue
 
+    except FritzBoxError as error:
+        logger.critical("Unexpected error: %s", error.message)
+        if fb:
+            del fb
+        if influxClient:
+            del influxClient
+        if influxWriteAPI:
+            del influxWriteAPI
+
     except Exception as error:
-        logger.critical("Unexpected error: %s", error.args[0])
+        logger.critical("Unexpected error: %s", error.message)
         if fb:
             del fb
         if influxClient:
