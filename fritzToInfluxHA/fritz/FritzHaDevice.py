@@ -18,7 +18,15 @@ class FritzHaDeviceError(Exception):
     """
     Base exception class for this module
     """
-    pass
+    def __init__(self):
+        self.message = "FritzHaDeviceError"
+
+class FritzHaDeviceInfluxWriteError(FritzHaDeviceError):
+    """
+    Base exception class for this module
+    """
+    def __init__(self):
+        self.message = "Error while writing data to InfluxDB"
 
 class FritzHaDevice:
     """
@@ -36,6 +44,7 @@ class FritzHaDevice:
         self.state = None
         self.present = None
 
+        self.upToDate = False
         self.voltage = None
         self.power = None
         self.energy = None
@@ -68,45 +77,49 @@ class FritzHaDevice:
 
     def writeMeasurmentsToInfluxDB(self, write_api, org, bucket):
         ts = self.measurementTime.strftime("%Y-%m-%dT%H:%M:%S.%f+02")
-        if "voltage" in self.measurements:
-            if self.measurements["voltage"] and self.voltage:
-                point = influxdb_client.Point("voltage") \
-                    .tag("ain", self.ain) \
-                    .tag("location", self.location) \
-                    .tag("sublocation", self.sublocation) \
-                    .tag("state", self.state) \
-                    .field("value", self.voltage)
-                write_api.write(bucket=bucket, org=org, record=point)
+        try:
+            if self.upToDate:
+                if "voltage" in self.measurements:
+                    if self.measurements["voltage"] and self.voltage:
+                        point = influxdb_client.Point("voltage") \
+                            .tag("ain", self.ain) \
+                            .tag("location", self.location) \
+                            .tag("sublocation", self.sublocation) \
+                            .tag("state", self.state) \
+                            .field("value", self.voltage)
+                        write_api.write(bucket=bucket, org=org, record=point)
 
-        if "power" in self.measurements:
-            if self.measurements["power"] and self.power:
-                point = influxdb_client.Point("power") \
-                    .tag("ain", self.ain) \
-                    .tag("location", self.location) \
-                    .tag("sublocation", self.sublocation) \
-                    .tag("state", self.state) \
-                    .field("value", self.power)
-                write_api.write(bucket=bucket, org=org, record=point)
+                if "power" in self.measurements:
+                    if self.measurements["power"] and self.power:
+                        point = influxdb_client.Point("power") \
+                            .tag("ain", self.ain) \
+                            .tag("location", self.location) \
+                            .tag("sublocation", self.sublocation) \
+                            .tag("state", self.state) \
+                            .field("value", self.power)
+                        write_api.write(bucket=bucket, org=org, record=point)
 
-        if "energy" in self.measurements:
-            if self.measurements["energy"] and self.energy:
-                point = influxdb_client.Point("energy") \
-                    .tag("ain", self.ain) \
-                    .tag("location", self.location) \
-                    .tag("sublocation", self.sublocation) \
-                    .tag("state", self.state) \
-                    .field("value", self.energy)
-                write_api.write(bucket=bucket, org=org, record=point)
+                if "energy" in self.measurements:
+                    if self.measurements["energy"] and self.energy:
+                        point = influxdb_client.Point("energy") \
+                            .tag("ain", self.ain) \
+                            .tag("location", self.location) \
+                            .tag("sublocation", self.sublocation) \
+                            .tag("state", self.state) \
+                            .field("value", self.energy)
+                        write_api.write(bucket=bucket, org=org, record=point)
 
-        if "temperature" in self.measurements:
-            if self.measurements["temperature"] and self.temperature:
-                state = self.state
-                if not state:
-                    state = "1"
-                point = influxdb_client.Point("temperature") \
-                    .tag("ain", self.ain) \
-                    .tag("location", self.location) \
-                    .tag("sublocation", self.sublocation) \
-                    .tag("state", state) \
-                    .field("value", self.temperature)
-                write_api.write(bucket=bucket, org=org, record=point)
+                if "temperature" in self.measurements:
+                    if self.measurements["temperature"] and self.temperature:
+                        state = self.state
+                        if not state:
+                            state = "1"
+                        point = influxdb_client.Point("temperature") \
+                            .tag("ain", self.ain) \
+                            .tag("location", self.location) \
+                            .tag("sublocation", self.sublocation) \
+                            .tag("state", state) \
+                            .field("value", self.temperature)
+                        write_api.write(bucket=bucket, org=org, record=point)
+        except Exception:
+            raise FritzHaDeviceInfluxWriteError

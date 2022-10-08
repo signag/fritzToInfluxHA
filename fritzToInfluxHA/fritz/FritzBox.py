@@ -32,6 +32,7 @@ from enum import Enum
 import datetime
 import influxdb_client
 from .FritzHaDevice import FritzHaDevice
+from .FritzHaDevice import FritzHaDeviceInfluxWriteError
 
 #Setup logging
 import logging
@@ -245,6 +246,10 @@ class FritzBox:
         """
         Query device info from Fritzbox and update devices with measurements
         """
+        # Reset device upToDate status
+        for sdev in self.devices:
+            sdev.upToDate = False
+            
         try:
             measurementTime = datetime.datetime.now()
             theUrl = self.url + "webservices/homeautoswitch.lua" + "?switchcmd=getdevicelistinfos&sid=" + self.sid
@@ -256,7 +261,7 @@ class FritzBox:
                 resp = self.sendRequest(theUrl)
                 if not resp:
                     # In case of repeated error throw exception
-                    logger.error("Error sending request for getdevicelistinfos after successful logib")
+                    logger.error("Error sending request for getdevicelistinfos after successful login")
                     raise FritzBoxError
 
             root = ET.fromstring(resp)
@@ -287,6 +292,7 @@ class FritzBox:
                         if celsius:
                             device.temperature = int(celsius)/10
                     device.measurementTime = measurementTime
+                    device.upToDate = True
 
         except FritzBoxError as error:
             raise
@@ -323,56 +329,57 @@ class FritzBox:
             f.write(txt)
 
         for dev in self.devices:
-            txt = ""
-            if dev.measurementTime:
-                ts = dev.measurementTime.strftime("%Y-%m-%d %H:%M:%S.%f")
-                txt = txt + ts + sep
-            else:
-                txt = txt + sep
-            if dev.ain:
-                txt = txt + dev.ain + sep
-            else:
-                txt = txt + sep
-            if dev.type:
-                txt = txt + dev.type.name + sep
-            else:
-                txt = txt + sep
-            if dev.name:
-                txt = txt + dev.name + sep
-            else:
-                txt = txt + sep
-            if dev.location:
-                txt = txt + dev.location + sep
-            else:
-                txt = txt + sep
-            if dev.sublocation:
-                txt = txt + dev.sublocation + sep
-            else:
-                txt = txt + sep
-            if dev.state:
-                txt = txt + dev.state + sep
-            else:
-                txt = txt + sep
-            if dev.present:
-                txt = txt + dev.present + sep
-            else:
-                txt = txt + sep
-            if dev.voltage:
-                txt = txt + format(dev.voltage) + sep
-            else:
-                txt = txt + sep
-            if dev.power:
-                txt = txt + format(dev.power) + sep
-            else:
-                txt = txt + sep
-            if dev.energy:
-                txt = txt + format(dev.energy) + sep
-            else:
-                txt = txt + sep
-            if dev.temperature:
-                txt = txt + format(dev.temperature)
-            txt = txt + "\n"
-            f.write(txt)
+            if dev.upToDate:
+                txt = ""
+                if dev.measurementTime:
+                    ts = dev.measurementTime.strftime("%Y-%m-%d %H:%M:%S.%f")
+                    txt = txt + ts + sep
+                else:
+                    txt = txt + sep
+                if dev.ain:
+                    txt = txt + dev.ain + sep
+                else:
+                    txt = txt + sep
+                if dev.type:
+                    txt = txt + dev.type.name + sep
+                else:
+                    txt = txt + sep
+                if dev.name:
+                    txt = txt + dev.name + sep
+                else:
+                    txt = txt + sep
+                if dev.location:
+                    txt = txt + dev.location + sep
+                else:
+                    txt = txt + sep
+                if dev.sublocation:
+                    txt = txt + dev.sublocation + sep
+                else:
+                    txt = txt + sep
+                if dev.state:
+                    txt = txt + dev.state + sep
+                else:
+                    txt = txt + sep
+                if dev.present:
+                    txt = txt + dev.present + sep
+                else:
+                    txt = txt + sep
+                if dev.voltage:
+                    txt = txt + format(dev.voltage) + sep
+                else:
+                    txt = txt + sep
+                if dev.power:
+                    txt = txt + format(dev.power) + sep
+                else:
+                    txt = txt + sep
+                if dev.energy:
+                    txt = txt + format(dev.energy) + sep
+                else:
+                    txt = txt + sep
+                if dev.temperature:
+                    txt = txt + format(dev.temperature)
+                txt = txt + "\n"
+                f.write(txt)
 
         f.close()
 
@@ -380,6 +387,11 @@ class FritzBox:
         """
         Write measurements to InfluxDB
         """
-        for dev in self.devices:
-            if dev.isMonitored:
-                dev.writeMeasurmentsToInfluxDB(write_api, org, bucket)
+        try:
+            for dev in self.devices:
+                if dev.isMonitored:
+                    dev.writeMeasurmentsToInfluxDB(write_api, org, bucket)
+        except FritzHaDeviceInfluxWriteError as error:
+            logger.error("Error: %s", error.message)
+            raise FritzBoxIgnoreableError
+            

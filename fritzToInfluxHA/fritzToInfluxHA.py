@@ -438,8 +438,8 @@ while not stop:
         if influxWriteAPI:
             del influxWriteAPI
 
-    except Exception as error:
-        logger.critical("Unexpected error: %s", error.message)
+    except Exception as e:
+        logger.critical("Unexpected error (%s): %s", e.__class__, e.__cause__)
         if fb:
             del fb
         if influxClient:
