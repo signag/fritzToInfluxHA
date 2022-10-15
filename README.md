@@ -39,7 +39,6 @@ usage: fritzToInfluxHA.py [-h] [-t] [-s] [-l] [-L] [-F] [-f FILE] [-v] [-c CONFI
     This configuration file specifies credentials for Fritz!Box access,
     the devices to read from, the connection to the InfluxDB and other runtime parameters.
 
-
 options:
   -h, --help            show this help message and exit
   -t, --test            Test run - single cycle - no wait
